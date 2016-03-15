@@ -18,6 +18,8 @@
 #include "../dec/decode.h"
 #include "../enc/encode.h"
 
+static const size_t DICTIONARY_SIZE = 16384;
+
 
 static bool ParseQuality(const char* s, int* quality) {
   if (s[0] >= '0' && s[0] <= '9') {
@@ -34,6 +36,7 @@ static bool ParseQuality(const char* s, int* quality) {
 static void ParseArgv(int argc, char **argv,
                       char **input_path,
                       char **output_path,
+					  char **custom_path,
                       int *force,
                       int *quality,
                       int *decompress,
@@ -91,6 +94,15 @@ static void ParseArgv(int argc, char **argv,
         *output_path = argv[k + 1];
         ++k;
         continue;
+      } else if (!strcmp("--custom", argv[k]) ||
+                 !strcmp("--cust", argv[k]) ||
+                 !strcmp("-c", argv[k])) {
+        if (*custom_path != 0) {
+          goto error;
+        }
+        *custom_path = argv[k + 1];
+        ++k;
+        continue;
       } else if (!strcmp("--quality", argv[k]) ||
                  !strcmp("-q", argv[k])) {
         if (!ParseQuality(argv[k + 1], quality)) {
@@ -124,6 +136,7 @@ error:
   fprintf(stderr,
           "Usage: %s [--force] [--quality n] [--decompress]"
           " [--input filename] [--output filename] [--repeat iters]"
+		  " [--custom filename]"
           " [--verbose] [--window n]\n",
           argv[0]);
   exit(1);
@@ -167,6 +180,18 @@ static FILE *OpenOutputFile(const char *output_path, const int force) {
   return fdopen(fd, "wb");
 }
 
+static FILE* OpenCustomFile(const char* custom_path) {
+  if (custom_path == 0) {
+    return NULL;
+  }
+  FILE* f = fopen(custom_path, "rb");
+  if (f == 0) {
+    perror("fopen");
+    exit(1);
+  }
+  return f;
+}
+
 int64_t FileSize(char *path) {
   FILE *f = fopen(path, "rb");
   if (f == NULL) {
@@ -185,7 +210,7 @@ int64_t FileSize(char *path) {
 
 static const size_t kFileBufferSize = 65536;
 
-void Decompresss(FILE* fin, FILE* fout) {
+void Decompresss(FILE* fin, FILE* fout, FILE* fcust) {
   uint8_t* input = new uint8_t[kFileBufferSize];
   uint8_t* output = new uint8_t[kFileBufferSize];
   size_t total_out;
@@ -196,6 +221,13 @@ void Decompresss(FILE* fin, FILE* fout) {
   BrotliResult result = BROTLI_RESULT_NEEDS_MORE_INPUT;
   BrotliState s;
   BrotliStateInit(&s);
+  uint8_t* dictBuf = NULL;
+  if (fcust != NULL)
+  {
+    dictBuf = new uint8_t[DICTIONARY_SIZE];
+    size_t dictSize = fread(dictBuf, 1, DICTIONARY_SIZE, fcust);
+    BrotliSetCustomDictionary(dictSize, dictBuf, &s);
+  }
   while (1) {
     if (result == BROTLI_RESULT_NEEDS_MORE_INPUT) {
       if (feof(fin)) {
@@ -225,6 +257,7 @@ void Decompresss(FILE* fin, FILE* fout) {
   BrotliStateCleanup(&s);
   delete[] input;
   delete[] output;
+  delete[] dictBuf;
   if ((result == BROTLI_RESULT_NEEDS_MORE_OUTPUT) || ferror(fout)) {
     fprintf(stderr, "failed to write output\n");
     exit(1);
@@ -237,20 +270,22 @@ void Decompresss(FILE* fin, FILE* fout) {
 int main(int argc, char** argv) {
   char *input_path = 0;
   char *output_path = 0;
+  char *custom_path = 0;
   int force = 0;
   int quality = 11;
   int decompress = 0;
   int repeat = 1;
   int verbose = 0;
   int lgwin = 0;
-  ParseArgv(argc, argv, &input_path, &output_path, &force,
+  ParseArgv(argc, argv, &input_path, &output_path, &custom_path, &force,
             &quality, &decompress, &repeat, &verbose, &lgwin);
   const clock_t clock_start = clock();
   for (int i = 0; i < repeat; ++i) {
     FILE* fin = OpenInputFile(input_path);
     FILE* fout = OpenOutputFile(output_path, force);
+	FILE* fcust = OpenCustomFile(custom_path);
     if (decompress) {
-      Decompresss(fin, fout);
+      Decompresss(fin, fout, fcust);
     } else {
       brotli::BrotliParams params;
       params.lgwin = lgwin;
@@ -258,7 +293,18 @@ int main(int argc, char** argv) {
       try {
         brotli::BrotliFileIn in(fin, 1 << 16);
         brotli::BrotliFileOut out(fout);
-        if (!BrotliCompress(params, &in, &out)) {
+		if (fcust != NULL) {
+		  uint8_t* dictBuf = new uint8_t[DICTIONARY_SIZE];
+		  size_t dictSize = fread(dictBuf, 1, DICTIONARY_SIZE, fcust);
+		  if (!BrotliCompressWithCustomDictionary(dictSize, dictBuf, params, &in, &out)) {
+            delete [] dictBuf;
+			fprintf(stderr, "compression failed\n");
+            unlink(output_path);
+            exit(1);
+		  }
+		  delete [] dictBuf;
+		}
+        else if (!BrotliCompress(params, &in, &out)) {
           fprintf(stderr, "compression failed\n");
           unlink(output_path);
           exit(1);
