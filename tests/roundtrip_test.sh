@@ -29,3 +29,20 @@ for file in $INPUTS; do
     diff -q $file $uncompressed
   done
 done
+
+INPUTS_CUSTOM="""
+testdata/works.bin
+testdata/broken.bin
+$BRO
+"""
+
+for file in $INPUTS_CUSTOM; do
+  for quality in 1 6 9 11; do
+    echo "Custom dictionary roundtrip testing $file at quality $quality"
+    compressed=${file}.bro
+    uncompressed=${file}.unbro
+    $BRO -f -q $quality -i $file -o $compressed -c testdata/dictator.out
+    $BRO -f -d -i $compressed -o $uncompressed -c testdata/dictator.out
+    diff -q $file $uncompressed
+  done
+done
