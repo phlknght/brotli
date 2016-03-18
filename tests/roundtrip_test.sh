@@ -10,7 +10,6 @@ testdata/alice29.txt
 testdata/asyoulik.txt
 testdata/lcet10.txt
 testdata/plrabn12.txt
-../enc/encode.cc
 ../enc/dictionary.h
 ../dec/decode.c
 $BRO
