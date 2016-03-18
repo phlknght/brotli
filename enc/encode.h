@@ -17,6 +17,7 @@
 #include "./static_dict.h"
 #include "./streams.h"
 #include "./types.h"
+#include "./backward_references.h"
 
 namespace brotli {
 
@@ -119,7 +120,7 @@ class BrotliCompressor {
   // Returns false if the size of the input data is larger than
   // input_block_size().
   bool WriteBrotliData(const bool is_last, const bool force_flush,
-                       size_t* out_size, uint8_t** output);
+                       size_t* out_size, uint8_t** output, BackwardReferencesContext* ctx);
 
   // Fills the new state with a dictionary for LZ77, warming up the ringbuffer,
   // e.g. for custom static dictionaries for data formats.

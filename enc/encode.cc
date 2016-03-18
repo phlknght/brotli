@@ -332,7 +332,8 @@ void BrotliCompressor::BrotliSetCustomDictionary(
 bool BrotliCompressor::WriteBrotliData(const bool is_last,
                                        const bool force_flush,
                                        size_t* out_size,
-                                       uint8_t** output) {
+                                       uint8_t** output,
+                                       BackwardReferencesContext* ctx) {
   const uint64_t delta = input_pos_ - last_processed_pos_;
   const uint8_t* data = ringbuffer_->start();
   const uint32_t mask = ringbuffer_->mask();
@@ -400,7 +401,8 @@ bool BrotliCompressor::WriteBrotliData(const bool is_last,
                            &last_insert_len_,
                            &commands_[num_commands_],
                            &num_commands_,
-                           &num_literals_);
+                           &num_literals_,
+                           ctx);
 
   size_t max_length = std::min<size_t>(mask + 1, 1u << kMaxInputBlockBits);
   if (!is_last && !force_flush &&
@@ -685,7 +687,8 @@ bool BrotliCompressor::WriteMetaBlock(const size_t input_size,
   CopyInputToRingBuffer(input_size, input_buffer);
   size_t out_size = 0;
   uint8_t* output;
-  if (!WriteBrotliData(is_last, /* force_flush = */ true, &out_size, &output) ||
+  BackwardReferencesContext ctx;
+  if (!WriteBrotliData(is_last, /* force_flush = */ true, &out_size, &output, &ctx) ||
       out_size > *encoded_size) {
     return false;
   }
@@ -937,6 +940,9 @@ int BrotliCompressWithCustomDictionary(size_t dictsize, const uint8_t* dict,
   bool final_block = false;
   BrotliCompressor compressor(params);
   if (dictsize != 0) compressor.BrotliSetCustomDictionary(dictsize, dict);
+
+  BackwardReferencesContext ctx;
+
   while (!final_block) {
     if (!CopyOneBlockToRingBuffer(in, &compressor, &in_bytes, &final_block)) {
       return false;
@@ -944,7 +950,7 @@ int BrotliCompressWithCustomDictionary(size_t dictsize, const uint8_t* dict,
     out_bytes = 0;
     if (!compressor.WriteBrotliData(final_block,
                                     /* force_flush = */ false,
-                                    &out_bytes, &output)) {
+                                    &out_bytes, &output, &ctx)) {
       return false;
     }
     if (out_bytes > 0 && !out->Write(output, out_bytes)) {

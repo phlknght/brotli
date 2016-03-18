@@ -58,7 +58,8 @@ bool WriteMetaBlockParallel(const BrotliParams& params,
                             const bool is_first,
                             const bool is_last,
                             size_t* encoded_size,
-                            uint8_t* encoded_buffer) {
+                            uint8_t* encoded_buffer,
+                            BackwardReferencesContext* ctx) {
   if (input_size == 0) {
     return false;
   }
@@ -111,7 +112,8 @@ bool WriteMetaBlockParallel(const BrotliParams& params,
       &last_insert_len,
       commands,
       &num_commands,
-      &num_literals);
+      &num_literals,
+      ctx);
   delete hashers;
   if (last_insert_len > 0) {
     commands[num_commands++] = Command(last_insert_len);
@@ -245,6 +247,7 @@ int BrotliCompressBufferParallel(BrotliParams params,
         static_cast<uint32_t>(std::min(max_prefix_size, pos));
     size_t out_size = input_block_size + (input_block_size >> 3) + 1024;
     std::vector<uint8_t> out(out_size);
+    BackwardReferencesContext ctx;
     if (!WriteMetaBlockParallel(params,
                                 input_block_size,
                                 &input_buffer[pos],
@@ -253,7 +256,8 @@ int BrotliCompressBufferParallel(BrotliParams params,
                                 pos == 0,
                                 pos + input_block_size == input_size,
                                 &out_size,
-                                &out[0])) {
+                                &out[0],
+                                &ctx)) {
       return false;
     }
     out.resize(out_size);
