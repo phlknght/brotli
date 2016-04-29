@@ -9,7 +9,7 @@
 #ifndef BROTLI_ENC_RINGBUFFER_H_
 #define BROTLI_ENC_RINGBUFFER_H_
 
-#include <cstdlib>  /* free, realloc */
+#include <stdlib.h>  /* free, realloc */
 
 #include "./port.h"
 #include "./types.h"

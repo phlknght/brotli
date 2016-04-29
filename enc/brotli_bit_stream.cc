@@ -11,7 +11,7 @@
 #include "./brotli_bit_stream.h"
 
 #include <algorithm>
-#include <cstdlib>  /* free, malloc */
+#include <stdlib.h>  /* free, malloc */
 #include <cstring>
 #include <limits>
 #include <vector>

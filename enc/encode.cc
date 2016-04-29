@@ -9,7 +9,7 @@
 #include "./encode.h"
 
 #include <algorithm>
-#include <cstdlib>  /* free, malloc */
+#include <stdlib.h>  /* free, malloc */
 #include <cstring>  /* memset */
 #include <limits>
 
